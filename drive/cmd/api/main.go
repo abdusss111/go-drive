@@ -15,9 +15,13 @@ import (
 	"github.com/abduss/godrive/internal/file"
 	"github.com/abduss/godrive/internal/server"
 	"github.com/abduss/godrive/internal/storage"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file if it exists (ignore error if file doesn't exist)
+	_ = godotenv.Load()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)

@@ -67,7 +67,11 @@ func (h *httpHandler) register(c *gin.Context) {
 		case ErrInvalidCredentials:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid credentials"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
+			// Include error message for debugging
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":  "failed to register user",
+				"detail": err.Error(),
+			})
 		}
 		return
 	}
@@ -91,7 +95,11 @@ func (h *httpHandler) login(c *gin.Context) {
 		case ErrInvalidCredentials:
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to authenticate"})
+			// Include error message for debugging
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":  "failed to authenticate",
+				"detail": err.Error(),
+			})
 		}
 		return
 	}

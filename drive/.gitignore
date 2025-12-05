@@ -1,0 +1,9 @@
+/docs
+/.cursor
+/bin
+/.env
+/.env.*
+/dist
+/coverage
+/tmp
+.DS_Store

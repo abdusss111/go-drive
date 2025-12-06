@@ -2,111 +2,93 @@ package presigned
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/url"
 	"time"
 
-	"github.com/minio/minio-go/v7"
+	"github.com/google/uuid"
 )
 
-type ScopeToken struct {
-	UserID    string
-	Bucket    string
-	Object    string
-	CanRead   bool
-	CanWrite  bool
-	ExpiresAt time.Time
+var ErrInvalidMethod = fmt.Errorf("invalid method: must be GET or PUT")
+
+type MinioClient interface {
+	PresignedGetObject(ctx context.Context, bucket, object string, expiry time.Duration, params map[string]string) (*url.URL, error)
+	PresignedPutObject(ctx context.Context, bucket, object string, expiry time.Duration) (*url.URL, error)
 }
 
 type Service struct {
-	minioClient *minio.Client
-	ttl         time.Duration
+	client MinioClient
+	ttl    time.Duration
+	repo   *Repository
 }
 
-func NewService(minioClient *minio.Client, ttl time.Duration) *Service {
+func NewService(client MinioClient, ttl time.Duration, repo *Repository) *Service {
 	return &Service{
-		minioClient: minioClient,
-		ttl:         ttl,
+		client: client,
+		ttl:    ttl,
+		repo:   repo,
 	}
 }
 
-func (s *Service) ValidateOwnership(userID, ownerID string) bool {
-	return userID == ownerID
-}
-
-func (s *Service) ValidateScope(token ScopeToken, bucket, object string, write bool) bool {
-	if time.Now().After(token.ExpiresAt) {
-		return false
-	}
-	if token.Bucket != bucket {
-		return false
-	}
-	if token.Object != object {
-		return false
-	}
-	if write && !token.CanWrite {
-		return false
-	}
-	if !write && !token.CanRead {
-		return false
-	}
-	return true
-}
-
-func (s *Service) GenerateGetURL(ctx context.Context, bucket, object string) (string, error) {
-	reqParams := make(url.Values)
-
-	u, err := s.minioClient.PresignedGetObject(
-		ctx,
-		bucket,
-		object,
-		s.ttl,
-		reqParams,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return u.String(), nil
-}
-
-func (s *Service) GeneratePutURL(ctx context.Context, bucket, object string) (string, error) {
-	u, err := s.minioClient.PresignedPutObject(
-		ctx,
-		bucket,
-		object,
-		s.ttl,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return u.String(), nil
-}
-
-func (s *Service) GeneratePresignedWithAccessCheck(
+func (s *Service) GenerateURL(
 	ctx context.Context,
-	bucket string,
-	object string,
-	userID string,
-	ownerID string,
-	scope *ScopeToken,
-	write bool,
-) (string, error) {
+	bucketName string,
+	objectName string,
+	method string,
+	userID uuid.UUID,
+	bucketID uuid.UUID,
+	fileID uuid.UUID,
+) (string, Record, AuditRecord, error) {
 
-	if scope != nil {
-		if !s.ValidateScope(*scope, bucket, object, write) {
-			return "", errors.New("access denied: invalid scope token")
+	if method != "GET" && method != "PUT" {
+		return "", Record{}, AuditRecord{}, ErrInvalidMethod
+	}
+
+	expiry := s.ttl
+	var urlStr string
+
+	switch method {
+	case "GET":
+		u, err := s.client.PresignedGetObject(ctx, bucketName, objectName, expiry, nil)
+		if err != nil {
+			return "", Record{}, AuditRecord{}, err
 		}
+		urlStr = u.String()
+
+	case "PUT":
+		u, err := s.client.PresignedPutObject(ctx, bucketName, objectName, expiry)
+		if err != nil {
+			return "", Record{}, AuditRecord{}, err
+		}
+		urlStr = u.String()
 	}
 
-	if !s.ValidateOwnership(userID, ownerID) {
-		return "", errors.New("access denied: not the owner")
+	rec := Record{
+		ID:       uuid.New(),
+		ObjectID: fileID,
+		Method:   method,
+		Expires:  time.Now().Add(expiry),
 	}
 
-	if write {
-		return s.GeneratePutURL(ctx, bucket, object)
+	saveErr := s.repo.SaveRecord(ctx, rec)
+	if saveErr != nil {
+		return "", Record{}, AuditRecord{}, saveErr
 	}
 
-	return s.GenerateGetURL(ctx, bucket, object)
+	audit := AuditRecord{
+		ID:        uuid.New(),
+		UserID:    userID,
+		BucketID:  bucketID,
+		FileID:    fileID,
+		Method:    method,
+		ExpiresAt: rec.Expires,
+		CreatedAt: time.Now(),
+	}
+
+	auditErr := s.repo.SaveAudit(ctx, audit)
+	if auditErr != nil {
+		return "", Record{}, AuditRecord{}, auditErr
+	}
+
+	return urlStr, rec, audit, nil
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/abduss/godrive/internal/file"
 	"github.com/abduss/godrive/internal/server"
 	"github.com/abduss/godrive/internal/storage"
+	"github.com/abduss/godrive/internal/usage"
 	"github.com/joho/godotenv"
 )
 
@@ -51,9 +52,12 @@ func main() {
 	bucketRepo := bucket.NewRepository(dbPool)
 	fileRepo := file.NewRepository(dbPool)
 
+	usageRepo := usage.NewRepository(dbPool)
+	usageService := usage.NewService(usageRepo)
+
 	bucketService := bucket.NewService(bucketRepo, fileRepo, minioClient, cfg.MinIO.Bucket)
 	fileStore := file.NewMinIOStore(minioClient)
-	fileService := file.NewService(fileRepo, bucketRepo, fileStore, cfg.MinIO.Bucket)
+	fileService := file.NewService(fileRepo, bucketRepo, fileStore, cfg.MinIO.Bucket, usageService)
 
 	router := server.NewRouter(server.Dependencies{
 		Config:        cfg,
@@ -62,6 +66,7 @@ func main() {
 		AuthService:   authService,
 		BucketService: bucketService,
 		FileService:   fileService,
+		UsageService:  usageService,
 	})
 
 	httpServer := &http.Server{

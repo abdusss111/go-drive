@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/abduss/godrive/internal/auth"
+	"github.com/abduss/godrive/internal/usage"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -49,8 +51,23 @@ func (h *httpHandler) uploadFile(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
 		case ErrFileTooLarge:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large"})
+		case usage.ErrQuotaBytesExceeded:
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "storage quota exceeded"})
+		case usage.ErrQuotaFilesExceeded:
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "file count quota exceeded"})
+		case usage.ErrQuotaExceeded:
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "quota exceeded"})
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
+			// Check if it's a quota error by error message
+			if strings.Contains(err.Error(), "quota") {
+				if strings.Contains(err.Error(), "bytes") {
+					c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "storage quota exceeded"})
+				} else {
+					c.JSON(http.StatusTooManyRequests, gin.H{"error": "quota exceeded"})
+				}
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
+			}
 		}
 		return
 	}

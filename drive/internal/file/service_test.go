@@ -21,7 +21,7 @@ func TestUploadStoresMetadataAndUpdatesUsage(t *testing.T) {
 		buckets: map[uuid.UUID]bucket.Bucket{},
 	}
 	objectStore := &fakeObjectStore{}
-	service := NewService(repo, buckets, objectStore, "godrive")
+	service := NewService(repo, buckets, objectStore, "godrive", nil)
 
 	ownerID := uuid.New()
 	bucketID := uuid.New()
@@ -54,7 +54,7 @@ func TestDeleteRemovesMetadataAndObject(t *testing.T) {
 		buckets: map[uuid.UUID]bucket.Bucket{},
 	}
 	objectStore := &fakeObjectStore{reader: bytes.NewReader([]byte("payload"))}
-	service := NewService(repo, buckets, objectStore, "godrive")
+	service := NewService(repo, buckets, objectStore, "godrive", nil)
 
 	ownerID := uuid.New()
 	bucketID := uuid.New()

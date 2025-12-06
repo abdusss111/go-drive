@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/abduss/godrive/internal/bucket"
+	"github.com/abduss/godrive/internal/usage"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 )
@@ -32,6 +33,11 @@ type Service struct {
 	objectStore  objectStore
 	objectBucket string
 	maxFileSize  int64
+	usageService quotaChecker
+}
+
+type quotaChecker interface {
+	CheckQuota(ctx context.Context, userID uuid.UUID, newFileSize, newFileCount int64) error
 }
 
 type bucketStore interface {
@@ -47,13 +53,14 @@ type objectStore interface {
 }
 
 // NewService constructs a file service.
-func NewService(repo metadataStore, buckets bucketStore, store objectStore, objectBucket string) *Service {
+func NewService(repo metadataStore, buckets bucketStore, store objectStore, objectBucket string, usageService quotaChecker) *Service {
 	return &Service{
 		repo:         repo,
 		buckets:      buckets,
 		objectStore:  store,
 		objectBucket: objectBucket,
 		maxFileSize:  defaultMaxFileSize,
+		usageService: usageService,
 	}
 }
 
@@ -70,6 +77,13 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 	size := fileHeader.Size
 	if size > s.maxFileSize {
 		return Metadata{}, ErrFileTooLarge
+	}
+
+	// Check quota before uploading to MinIO
+	if s.usageService != nil {
+		if err := s.usageService.CheckQuota(ctx, ownerID, size, 1); err != nil {
+			return Metadata{}, translateQuotaError(err)
+		}
 	}
 
 	fileID := uuid.New()
@@ -195,4 +209,22 @@ func translateBucketError(err error) error {
 	default:
 		return err
 	}
+}
+
+func translateQuotaError(err error) error {
+	if err == nil {
+		return nil
+	}
+	// Check if it's a quota error by comparing error messages
+	errStr := err.Error()
+	if strings.Contains(errStr, usage.ErrQuotaBytesExceeded.Error()) {
+		return usage.ErrQuotaBytesExceeded
+	}
+	if strings.Contains(errStr, usage.ErrQuotaFilesExceeded.Error()) {
+		return usage.ErrQuotaFilesExceeded
+	}
+	if strings.Contains(errStr, usage.ErrQuotaExceeded.Error()) {
+		return usage.ErrQuotaExceeded
+	}
+	return err
 }

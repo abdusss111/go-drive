@@ -6,6 +6,7 @@ import (
 	"github.com/abduss/godrive/internal/config"
 	"github.com/abduss/godrive/internal/file"
 	"github.com/abduss/godrive/internal/metrics"
+	"github.com/abduss/godrive/internal/usage"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
@@ -19,6 +20,7 @@ type Dependencies struct {
 	AuthService   *auth.Service
 	BucketService *bucket.Service
 	FileService   *file.Service
+	UsageService  *usage.Service
 }
 
 // NewRouter builds a Gin engine with foundational middleware and routes.
@@ -42,6 +44,9 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		}
 		if deps.FileService != nil {
 			file.RegisterRoutes(protected, deps.FileService)
+		}
+		if deps.UsageService != nil && deps.BucketService != nil {
+			usage.RegisterRoutes(protected, deps.UsageService, deps.BucketService)
 		}
 	}
 

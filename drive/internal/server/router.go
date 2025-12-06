@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
-	"github.com/abduss/godrive/internal/logger"
 )
 
 // Dependencies groups the services required by the HTTP router.
@@ -29,7 +28,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
-	router.Use(loggerMiddleware())
 
 	registerHealthRoutes(router, deps)
 	metrics.Register(router, deps.Config.Metrics.PrometheusPath)

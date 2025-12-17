@@ -32,18 +32,18 @@ var HTTPRequestDuration = prometheus.NewHistogramVec(
 var AuthAttemptsTotal = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "auth_attempts_total",
-		Help: "Count of authentication attempts",
+		Help: "Authentication attempts",
 	},
-	[]string{"result"}, // success | failure
+	[]string{"result"},
 )
 
 var FileOperationSizeBytes = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "file_operation_size_bytes",
-		Help:    "Size of uploaded/downloaded files in bytes",
-		Buckets: prometheus.ExponentialBuckets(1024, 2, 10), // 1KB..~
+		Help:    "Upload / download file sizes",
+		Buckets: prometheus.ExponentialBuckets(1024, 2, 10),
 	},
-	[]string{"operation"}, // upload | download
+	[]string{"operation"},
 )
 
 func InitMetrics() {
@@ -63,6 +63,7 @@ func Middleware() gin.HandlerFunc {
 		status := fmt.Sprintf("%d", c.Writer.Status())
 
 		HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
-		HTTPRequestDuration.WithLabelValues(method, path, status).Observe(float64(c.Writer.Size()))
+		HTTPRequestDuration.WithLabelValues(method, path, status).
+			Observe(float64(c.Writer.Size()))
 	}
 }

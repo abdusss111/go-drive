@@ -24,7 +24,7 @@ func Init() (*zap.Logger, error) {
 		return baseLogger, nil
 	}
 
-	level := logLevelFromEnv()
+	level := parseLevel(os.Getenv("LOG_LEVEL"))
 
 	cfg := zap.Config{
 		Level:       zap.NewAtomicLevelAt(level),
@@ -52,22 +52,11 @@ func Init() (*zap.Logger, error) {
 	return l, nil
 }
 
-func L() *zap.Logger {
-	if baseLogger != nil {
-		return baseLogger
-	}
-	l, err := Init()
-	if err != nil {
-		return zap.NewNop()
-	}
-	return l
-}
-
-func logLevelFromEnv() zapcore.Level {
-	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+func parseLevel(raw string) zapcore.Level {
+	switch strings.ToLower(raw) {
 	case "debug":
 		return zap.DebugLevel
-	case "warn":
+	case "warn", "warning":
 		return zap.WarnLevel
 	case "error":
 		return zap.ErrorLevel
@@ -76,6 +65,14 @@ func logLevelFromEnv() zapcore.Level {
 	default:
 		return zap.InfoLevel
 	}
+}
+
+func L() *zap.Logger {
+	if baseLogger != nil {
+		return baseLogger
+	}
+	l, _ := Init()
+	return l
 }
 
 func Middleware() gin.HandlerFunc {
@@ -90,18 +87,39 @@ func Middleware() gin.HandlerFunc {
 		c.Writer.Header().Set(CorrelationIDHeader, corrID)
 		c.Set(CorrelationIDKey, corrID)
 
-		reqLogger := L().With(zap.String(CorrelationIDKey, corrID))
+		reqLogger := L().With(
+			zap.String(CorrelationIDKey, corrID),
+			zap.String("layer", "http"),
+		)
 		c.Set(loggerKey, reqLogger)
 
 		c.Next()
 
-		if time.Since(start) > time.Second {
+		duration := time.Since(start)
+		status := c.Writer.Status()
+
+		if status >= 500 {
+			reqLogger.Error(
+				"server error",
+				zap.String("method", c.Request.Method),
+				zap.String("path", c.FullPath()),
+				zap.Int("status", status),
+				zap.Duration("duration", duration),
+			)
+		} else if status >= 400 {
+			reqLogger.Warn(
+				"client error",
+				zap.String("method", c.Request.Method),
+				zap.String("path", c.FullPath()),
+				zap.Int("status", status),
+			)
+		} else if duration > time.Second {
 			reqLogger.Warn(
 				"slow request",
 				zap.String("method", c.Request.Method),
 				zap.String("path", c.FullPath()),
-				zap.Int("status", c.Writer.Status()),
-				zap.Duration("duration", time.Since(start)),
+				zap.Int("status", status),
+				zap.Duration("duration", duration),
 			)
 		}
 	}

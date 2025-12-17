@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/abduss/godrive/internal/auth"
+	"github.com/abduss/godrive/internal/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -29,13 +30,13 @@ type createBucketRequest struct {
 func (h *httpHandler) createBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	var req createBucketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errors.HandleError(c, err, http.StatusBadRequest)
 		return
 	}
 
@@ -43,9 +44,9 @@ func (h *httpHandler) createBucket(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case ErrBucketNameExists:
-			c.JSON(http.StatusConflict, gin.H{"error": "bucket name already exists"})
+			errors.HandleErrorWithMessage(c, "bucket name already exists", http.StatusConflict)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create bucket"})
+			errors.HandleErrorWithMessage(c, "failed to create bucket", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -56,13 +57,13 @@ func (h *httpHandler) createBucket(c *gin.Context) {
 func (h *httpHandler) listBuckets(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	buckets, err := h.service.ListBuckets(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list buckets"})
+		errors.HandleErrorWithMessage(c, "failed to list buckets", http.StatusInternalServerError)
 		return
 	}
 
@@ -72,23 +73,23 @@ func (h *httpHandler) listBuckets(c *gin.Context) {
 func (h *httpHandler) getBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 
 	bucket, err := h.service.GetBucket(c.Request.Context(), userID, bucketID)
 	if err != nil {
 		if err == ErrBucketNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			errors.HandleErrorWithMessage(c, "bucket not found", http.StatusNotFound)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch bucket"})
+		errors.HandleErrorWithMessage(c, "failed to fetch bucket", http.StatusInternalServerError)
 		return
 	}
 
@@ -98,22 +99,22 @@ func (h *httpHandler) getBucket(c *gin.Context) {
 func (h *httpHandler) deleteBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.DeleteBucket(c.Request.Context(), userID, bucketID); err != nil {
 		switch err {
 		case ErrBucketNotFound:
-			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			errors.HandleErrorWithMessage(c, "bucket not found", http.StatusNotFound)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete bucket"})
+			errors.HandleErrorWithMessage(c, "failed to delete bucket", http.StatusInternalServerError)
 		}
 		return
 	}

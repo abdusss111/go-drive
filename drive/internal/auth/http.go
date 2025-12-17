@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/abduss/godrive/internal/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -51,7 +52,7 @@ type authResponse struct {
 func (h *httpHandler) register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errors.HandleError(c, err, http.StatusBadRequest)
 		return
 	}
 
@@ -63,15 +64,12 @@ func (h *httpHandler) register(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case ErrEmailAlreadyExists:
-			c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
+			errors.HandleErrorWithMessage(c, "email already registered", http.StatusConflict)
 		case ErrInvalidCredentials:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid credentials"})
+			errors.HandleErrorWithMessage(c, "invalid credentials", http.StatusBadRequest)
 		default:
 			// Include error message for debugging
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":  "failed to register user",
-				"detail": err.Error(),
-			})
+			errors.HandleErrorWithMessage(c, "failed to register user", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -82,7 +80,7 @@ func (h *httpHandler) register(c *gin.Context) {
 func (h *httpHandler) login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		errors.HandleError(c, err, http.StatusBadRequest)
 		return
 	}
 
@@ -93,13 +91,10 @@ func (h *httpHandler) login(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case ErrInvalidCredentials:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+			errors.HandleErrorWithMessage(c, "invalid credentials", http.StatusUnauthorized)
 		default:
 			// Include error message for debugging
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":  "failed to authenticate",
-				"detail": err.Error(),
-			})
+			errors.HandleErrorWithMessage(c, "failed to authenticate", http.StatusInternalServerError)
 		}
 		return
 	}

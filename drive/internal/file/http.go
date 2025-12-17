@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/abduss/godrive/internal/auth"
+	"github.com/abduss/godrive/internal/errors"
 	"github.com/abduss/godrive/internal/usage"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -28,19 +29,19 @@ type httpHandler struct {
 func (h *httpHandler) uploadFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file field is required"})
+		errors.HandleErrorWithMessage(c, "file field is required", http.StatusBadRequest)
 		return
 	}
 
@@ -48,25 +49,25 @@ func (h *httpHandler) uploadFile(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case ErrBucketMismatch:
-			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			errors.HandleErrorWithMessage(c, "bucket not found", http.StatusNotFound)
 		case ErrFileTooLarge:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "file too large"})
+			errors.HandleErrorWithMessage(c, "file too large", http.StatusBadRequest)
 		case usage.ErrQuotaBytesExceeded:
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "storage quota exceeded"})
+			errors.HandleErrorWithMessage(c, "storage quota exceeded", http.StatusRequestEntityTooLarge)
 		case usage.ErrQuotaFilesExceeded:
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "file count quota exceeded"})
+			errors.HandleErrorWithMessage(c, "file count quota exceeded", http.StatusTooManyRequests)
 		case usage.ErrQuotaExceeded:
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "quota exceeded"})
+			errors.HandleErrorWithMessage(c, "quota exceeded", http.StatusTooManyRequests)
 		default:
 			// Check if it's a quota error by error message
 			if strings.Contains(err.Error(), "quota") {
 				if strings.Contains(err.Error(), "bytes") {
-					c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "storage quota exceeded"})
+					errors.HandleErrorWithMessage(c, "storage quota exceeded", http.StatusRequestEntityTooLarge)
 				} else {
-					c.JSON(http.StatusTooManyRequests, gin.H{"error": "quota exceeded"})
+					errors.HandleErrorWithMessage(c, "quota exceeded", http.StatusTooManyRequests)
 				}
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload file"})
+				errors.HandleErrorWithMessage(c, "failed to upload file", http.StatusInternalServerError)
 			}
 		}
 		return
@@ -78,23 +79,23 @@ func (h *httpHandler) uploadFile(c *gin.Context) {
 func (h *httpHandler) listFiles(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 
 	list, err := h.service.List(c.Request.Context(), userID, bucketID)
 	if err != nil {
 		if err == ErrBucketMismatch {
-			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			errors.HandleErrorWithMessage(c, "bucket not found", http.StatusNotFound)
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list files"})
+		errors.HandleErrorWithMessage(c, "failed to list files", http.StatusInternalServerError)
 		return
 	}
 
@@ -104,18 +105,18 @@ func (h *httpHandler) listFiles(c *gin.Context) {
 func (h *httpHandler) downloadFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 	fileID, err := uuid.Parse(c.Param("fileID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
+		errors.HandleErrorWithMessage(c, "invalid file id", http.StatusBadRequest)
 		return
 	}
 
@@ -123,9 +124,9 @@ func (h *httpHandler) downloadFile(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case ErrFileNotFound:
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+			errors.HandleErrorWithMessage(c, "file not found", http.StatusNotFound)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to download file"})
+			errors.HandleErrorWithMessage(c, "failed to download file", http.StatusInternalServerError)
 		}
 		return
 	}
@@ -144,29 +145,29 @@ func (h *httpHandler) downloadFile(c *gin.Context) {
 func (h *httpHandler) deleteFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		errors.HandleErrorWithMessage(c, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	bucketID, err := uuid.Parse(c.Param("bucketID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		errors.HandleErrorWithMessage(c, "invalid bucket id", http.StatusBadRequest)
 		return
 	}
 	fileID, err := uuid.Parse(c.Param("fileID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
+		errors.HandleErrorWithMessage(c, "invalid file id", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.Delete(c.Request.Context(), userID, bucketID, fileID); err != nil {
 		switch err {
 		case ErrFileNotFound:
-			c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+			errors.HandleErrorWithMessage(c, "file not found", http.StatusNotFound)
 		case ErrBucketMismatch:
-			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			errors.HandleErrorWithMessage(c, "bucket not found", http.StatusNotFound)
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete file"})
+			errors.HandleErrorWithMessage(c, "failed to delete file", http.StatusInternalServerError)
 		}
 		return
 	}

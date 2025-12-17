@@ -1,97 +1,117 @@
-package main
+package logger
 
 import (
-	"context"
-	"net/http"
-	"os/signal"
-	"syscall"
+	"os"
+	"strings"
 	"time"
 
-	"github.com/abduss/godrive/internal/auth"
-	"github.github.com/abduss/godrive/internal/bucket"
-	"github.com/abduss/godrive/internal/config"
-	"github.com/abduss/godrive/internal/file"
-	"github.com/abduss/godrive/internal/logger"
-	"github.com/abduss/godrive/internal/server"
-	"github.com/abduss/godrive/internal/storage"
-	"github.com/joho/godotenv"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-func main() {
-	_ = godotenv.Load()
+const (
+	CorrelationIDHeader = "X-Correlation-ID"
+	CorrelationIDKey    = "correlation_id"
+	loggerKey           = "logger"
+)
 
-	logg, err := logger.Init()
+var baseLogger *zap.Logger
+
+func Init() (*zap.Logger, error) {
+	if baseLogger != nil {
+		return baseLogger, nil
+	}
+
+	level := logLevelFromEnv()
+
+	cfg := zap.Config{
+		Level:       zap.NewAtomicLevelAt(level),
+		Encoding:    "json",
+		OutputPaths: []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:       "timestamp",
+			LevelKey:      "level",
+			MessageKey:    "message",
+			CallerKey:     "caller",
+			StacktraceKey: "stack",
+			EncodeTime:    zapcore.ISO8601TimeEncoder,
+			EncodeLevel:   zapcore.LowercaseLevelEncoder,
+			EncodeCaller:  zapcore.ShortCallerEncoder,
+		},
+	}
+
+	l, err := cfg.Build(zap.AddCaller())
 	if err != nil {
-		panic("init logger: " + err.Error())
+		return nil, err
 	}
-	defer logg.Sync()
 
-	cfg, err := config.Load()
+	baseLogger = l
+	return l, nil
+}
+
+func L() *zap.Logger {
+	if baseLogger != nil {
+		return baseLogger
+	}
+	l, err := Init()
 	if err != nil {
-		logg.Fatal("load config", zap.Error(err))
+		return zap.NewNop()
 	}
+	return l
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	dbPool, err := storage.NewPostgresPool(ctx, cfg.Postgres)
-	if err != nil {
-		logg.Fatal("connect postgres", zap.Error(err))
+func logLevelFromEnv() zapcore.Level {
+	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	case "debug":
+		return zap.DebugLevel
+	case "warn":
+		return zap.WarnLevel
+	case "error":
+		return zap.ErrorLevel
+	case "fatal":
+		return zap.FatalLevel
+	default:
+		return zap.InfoLevel
 	}
-	defer dbPool.Close()
+}
 
-	minioClient, err := storage.NewMinIOClient(cfg.MinIO)
-	if err != nil {
-		logg.Fatal("connect minio", zap.Error(err))
-	}
+func Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
 
-	if err := storage.EnsureBucket(ctx, minioClient, cfg.MinIO.Bucket); err != nil {
-		logg.Fatal("ensure bucket", zap.Error(err))
-	}
-
-	authRepo := auth.NewRepository(dbPool)
-	authService := auth.NewService(authRepo, cfg.Auth)
-
-	bucketRepo := bucket.NewRepository(dbPool)
-	fileRepo := file.NewRepository(dbPool)
-
-	bucketService := bucket.NewService(bucketRepo, fileRepo, minioClient, cfg.MinIO.Bucket)
-	fileStore := file.NewMinIOStore(minioClient)
-	fileService := file.NewService(fileRepo, bucketRepo, fileStore, cfg.MinIO.Bucket)
-
-	router := server.NewRouter(server.Dependencies{
-		Config:        cfg,
-		DB:            dbPool,
-		ObjectStore:   minioClient,
-		AuthService:   authService,
-		BucketService: bucketService,
-		FileService:   fileService,
-	})
-
-	httpServer := &http.Server{
-		Addr:         cfg.Server.Address(),
-		Handler:      router,
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
-		IdleTimeout:  cfg.Server.IdleTimeout,
-	}
-
-	go func() {
-		logg.Info("GoDrive API listening", zap.String("address", cfg.Server.Address()))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logg.Fatal("http server", zap.Error(err))
+		corrID := c.Request.Header.Get(CorrelationIDHeader)
+		if corrID == "" {
+			corrID = uuid.NewString()
 		}
-	}()
 
-	<-ctx.Done()
-	stop()
+		c.Writer.Header().Set(CorrelationIDHeader, corrID)
+		c.Set(CorrelationIDKey, corrID)
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+		reqLogger := L().With(zap.String(CorrelationIDKey, corrID))
+		c.Set(loggerKey, reqLogger)
 
-	logg.Info("shutting down gracefully")
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		logg.Error("shutdown error", zap.Error(err))
+		c.Next()
+
+		if time.Since(start) > time.Second {
+			reqLogger.Warn(
+				"slow request",
+				zap.String("method", c.Request.Method),
+				zap.String("path", c.FullPath()),
+				zap.Int("status", c.Writer.Status()),
+				zap.Duration("duration", time.Since(start)),
+			)
+		}
 	}
+}
+
+func FromContext(c *gin.Context) *zap.Logger {
+	if v, ok := c.Get(loggerKey); ok {
+		if l, ok := v.(*zap.Logger); ok {
+			return l
+		}
+	}
+	return L()
 }

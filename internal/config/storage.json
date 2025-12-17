@@ -1,0 +1,44 @@
+{
+  "id": null,
+  "title": "Storage & File Activity",
+  "timezone": "browser",
+  "editable": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total Upload Requests",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(http_requests_total{path=~\".*upload.*\"})"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "stat",
+      "title": "Total Download Requests",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(http_requests_total{path=~\".*download.*\"})"
+        }
+      ],
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 }
+    },
+    {
+      "type": "graph",
+      "title": "File Operation Rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{path=~\".*(upload|download).*\"}[2m])",
+          "legendFormat": "{{method}} {{status}}"
+        }
+      ],
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 8 }
+    }
+  ],
+  "schemaVersion": 30,
+  "version": 1
+}

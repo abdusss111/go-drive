@@ -46,9 +46,7 @@ cp .env.example .env
 
 3. Start services with Docker Compose:
 ```bash
-make setup
-# or manually:
-docker-compose up -d
+docker-compose up --build
 make migrate-up
 ```
 

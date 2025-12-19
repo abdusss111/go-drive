@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/abduss/godrive/internal/bucket"
+	"github.com/abduss/godrive/internal/metrics"
 	"github.com/abduss/godrive/internal/usage"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -141,6 +142,8 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 	}
 	_ = s.buckets.RecordUsageSnapshot(ctx, ownerID)
 
+	metrics.FileOperationSizeBytes.WithLabelValues("upload").Observe(float64(stored.SizeBytes))
+
 	return stored, nil
 }
 
@@ -163,6 +166,8 @@ func (s *Service) Download(ctx context.Context, ownerID, bucketID, fileID uuid.U
 	if err != nil {
 		return Metadata{}, nil, fmt.Errorf("fetch object: %w", err)
 	}
+
+	metrics.FileOperationSizeBytes.WithLabelValues("download").Observe(float64(meta.SizeBytes))
 
 	return meta, object, nil
 }

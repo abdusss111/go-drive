@@ -1,0 +1,610 @@
+basePath: /v1
+definitions:
+  auth.authResponse:
+    properties:
+      tokens:
+        properties:
+          access_token:
+            type: string
+          access_token_expires_at:
+            type: integer
+          refresh_token:
+            type: string
+          refresh_token_expires_at:
+            type: integer
+        type: object
+      user:
+        properties:
+          created_at:
+            type: string
+          display_name:
+            type: string
+          email:
+            type: string
+          id:
+            type: string
+          is_admin:
+            type: boolean
+        type: object
+    type: object
+  auth.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  auth.registerRequest:
+    properties:
+      display_name:
+        maxLength: 128
+        type: string
+      email:
+        type: string
+      password:
+        maxLength: 72
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  bucket.Bucket:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      owner_id:
+        type: string
+      updated_at:
+        type: string
+      usage:
+        $ref: '#/definitions/bucket.UsageStats'
+    type: object
+  bucket.UsageStats:
+    properties:
+      file_count:
+        type: integer
+      total_bytes:
+        type: integer
+    type: object
+  bucket.createBucketRequest:
+    properties:
+      description:
+        maxLength: 255
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  file.Metadata:
+    properties:
+      bucket_id:
+        type: string
+      checksum:
+        type: string
+      content_type:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      object_name:
+        type: string
+      original_filename:
+        type: string
+      size_bytes:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  presigned.PresignedURLRequest:
+    properties:
+      method:
+        description: GET for download, PUT for upload
+        enum:
+        - GET
+        - PUT
+        type: string
+      ttl:
+        description: Optional TTL (e.g., "1h", "30m")
+        type: string
+    required:
+    - method
+    type: object
+  presigned.PresignedURLResponse:
+    properties:
+      expires_at:
+        type: string
+      method:
+        type: string
+      url:
+        type: string
+    type: object
+  usage.BucketUsageResponse:
+    properties:
+      bucket_id:
+        type: string
+      total_bytes:
+        type: integer
+      total_files:
+        type: integer
+    type: object
+  usage.UsageResponse:
+    properties:
+      quota_bytes:
+        type: integer
+      quota_files:
+        type: integer
+      total_bytes:
+        type: integer
+      total_files:
+        type: integer
+      usage_percent_bytes:
+        type: number
+      usage_percent_files:
+        type: number
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: High-performance file storage API with quota enforcement and presigned
+    URLs.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: GoDrive API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Log in to an existing account and receive a token pair.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Authenticate user
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new account and receive a token pair.
+      parameters:
+      - description: Registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/auth.authResponse'
+        "400":
+          description: invalid input
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: email already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - Auth
+  /buckets:
+    get:
+      description: Fetch all storage buckets owned by the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/bucket.Bucket'
+              type: array
+            type: object
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: List buckets
+      tags:
+      - Buckets
+    post:
+      consumes:
+      - application/json
+      description: Create a new storage bucket for the authenticated user.
+      parameters:
+      - description: Bucket details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/bucket.createBucketRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/bucket.Bucket'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: bucket already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Create a bucket
+      tags:
+      - Buckets
+  /buckets/{bucketID}:
+    delete:
+      description: Permanently delete a bucket and all files within it.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      responses:
+        "204":
+          description: no content
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: bucket not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete bucket
+      tags:
+      - Buckets
+    get:
+      description: Fetch metadata and usage for a specific bucket.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/bucket.Bucket'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: bucket not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get bucket details
+      tags:
+      - Buckets
+  /buckets/{bucketID}/files:
+    get:
+      description: Fetch metadata for all files in a specific bucket.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              items:
+                $ref: '#/definitions/file.Metadata'
+              type: array
+            type: object
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: List files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a new file to a specific bucket. Quota check applies.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/file.Metadata'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "413":
+          description: storage quota exceeded
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Upload a file
+      tags:
+      - Files
+  /buckets/{bucketID}/files/{fileID}:
+    delete:
+      description: Permanently delete a file from storage and metadata.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      - description: File UUID
+        in: path
+        name: fileID
+        required: true
+        type: string
+      responses:
+        "204":
+          description: no content
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: file/bucket not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete file
+      tags:
+      - Files
+  /buckets/{bucketID}/files/{fileID}/download:
+    get:
+      description: Stream a file's contents from the bucket.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      - description: File UUID
+        in: path
+        name: fileID
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: file not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Download file
+      tags:
+      - Files
+  /buckets/{bucketID}/files/{fileID}/presigned-url:
+    post:
+      consumes:
+      - application/json
+      description: Create a temporary signed link for direct cloud upload or download.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      - description: File UUID
+        in: path
+        name: fileID
+        required: true
+        type: string
+      - description: URL parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/presigned.PresignedURLRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/presigned.PresignedURLResponse'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: file not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Generate presigned URL
+      tags:
+      - Files
+  /buckets/{bucketID}/usage:
+    get:
+      description: Fetch storage usage and file count for a specific bucket.
+      parameters:
+      - description: Bucket UUID
+        in: path
+        name: bucketID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/usage.BucketUsageResponse'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: bucket not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get bucket usage
+      tags:
+      - Usage
+  /usage:
+    get:
+      description: Fetch total storage usage and file count across all buckets.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/usage.UsageResponse'
+        "401":
+          description: unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get user usage
+      tags:
+      - Usage
+securityDefinitions:
+  Bearer:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

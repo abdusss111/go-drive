@@ -48,6 +48,17 @@ type authResponse struct {
 	} `json:"tokens"`
 }
 
+// register handles user registration.
+// @Summary Register a new user
+// @Description Create a new account and receive a token pair.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body registerRequest true "Registration data"
+// @Success 201 {object} authResponse
+// @Failure 400 {object} map[string]string "invalid input"
+// @Failure 409 {object} map[string]string "email already exists"
+// @Router /auth/register [post]
 func (h *httpHandler) register(c *gin.Context) {
 	var req registerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -79,6 +90,17 @@ func (h *httpHandler) register(c *gin.Context) {
 	c.JSON(http.StatusCreated, marshalAuthResponse(result))
 }
 
+// login handles user authentication.
+// @Summary Authenticate user
+// @Description Log in to an existing account and receive a token pair.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body loginRequest true "Login credentials"
+// @Success 200 {object} authResponse
+// @Failure 400 {object} map[string]string "invalid input"
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Router /auth/login [post]
 func (h *httpHandler) login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

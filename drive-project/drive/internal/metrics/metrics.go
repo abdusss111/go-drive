@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,14 +56,19 @@ func InitMetrics() {
 
 func Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		start := time.Now()
 		method := c.Request.Method
 		path := c.FullPath()
+		if path == "" {
+			path = "unknown"
+		}
 
 		c.Next()
 
+		duration := time.Since(start).Seconds()
 		status := fmt.Sprintf("%d", c.Writer.Status())
 
 		HTTPRequestsTotal.WithLabelValues(method, path, status).Inc()
-		HTTPRequestDuration.WithLabelValues(method, path, status).Observe(float64(c.Writer.Size()))
+		HTTPRequestDuration.WithLabelValues(method, path, status).Observe(duration)
 	}
 }

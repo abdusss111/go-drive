@@ -1,0 +1,104 @@
+services:
+  # Go API Backend
+  - type: web
+    name: godrive-api
+    env: docker
+    region: oregon
+    plan: free  # 750 hours/month free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      # Server Configuration
+      - key: GODRIVE_API_HOST
+        value: 0.0.0.0
+      - key: GODRIVE_API_PORT
+        value: 8080
+      
+      # Database Configuration (using Render's managed PostgreSQL)
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: godrive-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: godrive-postgres
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: godrive-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: godrive-postgres
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: godrive-postgres
+          property: database
+      - key: POSTGRES_SSL_MODE
+        value: require  # Required for Render PostgreSQL
+      
+      # Object Storage Configuration
+      # Option 1: Cloudflare R2 (Recommended - 10GB free)
+      - key: MINIO_ENDPOINT
+        sync: false  # Set this manually in Render dashboard
+        # Example: <account-id>.r2.cloudflarestorage.com
+      - key: MINIO_ROOT_USER
+        sync: false  # Your R2 Access Key ID
+      - key: MINIO_ROOT_PASSWORD
+        sync: false  # Your R2 Secret Access Key
+      - key: MINIO_BUCKET
+        value: godrive
+      - key: MINIO_USE_SSL
+        value: true
+      - key: MINIO_REGION
+        value: auto
+      
+      # Option 2: AWS S3 (uncomment if using S3)
+      # - key: MINIO_ENDPOINT
+      #   value: s3.amazonaws.com
+      # - key: MINIO_ROOT_USER
+      #   sync: false  # AWS Access Key
+      # - key: MINIO_ROOT_PASSWORD
+      #   sync: false  # AWS Secret Key
+      # - key: MINIO_REGION
+      #   value: us-west-2
+      
+      # Authentication Secrets
+      - key: GODRIVE_JWT_SECRET
+        generateValue: true
+      - key: GODRIVE_JWT_REFRESH_SECRET
+        generateValue: true
+      
+      # Application Settings
+      - key: GODRIVE_LOG_LEVEL
+        value: info
+      - key: ENVIRONMENT
+        value: production
+      - key: GODRIVE_METRICS_PATH
+        value: /metrics
+    
+    healthCheckPath: /health/live
+    autoDeploy: true
+
+  # Prometheus (Optional - for metrics collection)
+  # Note: This is a Private Service and costs ~$7/month
+  # Alternative: Use Grafana Cloud free tier to scrape /metrics endpoint
+  # - type: pserv
+  #   name: godrive-prometheus
+  #   env: docker
+  #   plan: starter
+  #   region: oregon
+  #   dockerfilePath: ./Dockerfile.prometheus
+  #   disk:
+  #     name: prometheus-data
+  #     mountPath: /prometheus
+  #     sizeGB: 5
+
+databases:
+  # Managed PostgreSQL Database
+  - name: godrive-postgres
+    databaseName: godrive
+    user: godrive_app
+    plan: free  # Free tier: 1GB storage, 97 hours/month
+    region: oregon

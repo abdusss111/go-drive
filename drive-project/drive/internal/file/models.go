@@ -18,3 +18,8 @@ type Metadata struct {
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
+
+// GetOriginalFilename returns the original filename for interface compatibility.
+func (m Metadata) GetOriginalFilename() string {
+	return m.OriginalFilename
+}

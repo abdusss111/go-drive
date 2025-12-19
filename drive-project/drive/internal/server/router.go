@@ -10,9 +10,12 @@ import (
 	"github.com/abduss/godrive/internal/middleware"
 	"github.com/abduss/godrive/internal/presigned"
 	"github.com/abduss/godrive/internal/usage"
+	_ "github.com/abduss/godrive/docs"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Dependencies groups the services required by the HTTP router.
@@ -51,6 +54,9 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	}
 
 	registerHealthRoutes(router, deps)
+
+	// Swagger documentation
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	api := router.Group("/v1")
 	if deps.AuthService != nil {

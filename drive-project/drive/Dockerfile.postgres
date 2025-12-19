@@ -1,0 +1,6 @@
+FROM postgres:16-alpine
+
+# Copy initialization scripts if needed
+# COPY ./migrations/*.sql /docker-entrypoint-initdb.d/
+
+EXPOSE 5432

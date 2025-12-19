@@ -35,10 +35,11 @@ type MinIOClientAdapter struct {
 }
 
 func (a *MinIOClientAdapter) PresignedGetObject(ctx context.Context, bucketName string, objectName string, expiry time.Duration, reqParams interface{}) (*url.URL, error) {
-	// Convert map[string][]string to url.Values if needed
-	var values map[string][]string
+	var values url.Values
 	if reqParams != nil {
-		if m, ok := reqParams.(map[string][]string); ok {
+		if v, ok := reqParams.(url.Values); ok {
+			values = v
+		} else if m, ok := reqParams.(map[string][]string); ok {
 			values = m
 		}
 	}

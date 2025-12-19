@@ -53,14 +53,6 @@ func (s *Service) GeneratePresignedURL(ctx context.Context, ownerID, bucketID, f
 		return nil, fmt.Errorf("verify bucket: %w", err)
 	}
 
-	// Verify file ownership (for existing files)
-	if method == "GET" {
-		_, err := s.fileChecker.Get(ctx, ownerID, bucketID, fileID)
-		if err != nil {
-			return nil, fmt.Errorf("verify file: %w", err)
-		}
-	}
-
 	// Use default TTL if not provided
 	if ttl <= 0 {
 		ttl = s.defaultTTL
@@ -73,7 +65,23 @@ func (s *Service) GeneratePresignedURL(ctx context.Context, ownerID, bucketID, f
 
 	switch method {
 	case "GET":
-		presignedURL, err = s.objectStore.PresignedGetObject(ctx, s.objectBucket, objectName, ttl, make(map[string][]string))
+		// Verify file ownership and get original filename
+		metaObj, err := s.fileChecker.Get(ctx, ownerID, bucketID, fileID)
+		if err != nil {
+			return nil, fmt.Errorf("verify file: %w", err)
+		}
+
+		reqParams := make(url.Values)
+		// If we can identify the filename, set it in the response headers
+		// This ensures that when the link is clicked, the file downloads with its original name
+		if meta, ok := metaObj.(interface{ GetFilename() string }); ok {
+			reqParams.Set("response-content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", meta.GetFilename()))
+		} else if meta, ok := metaObj.(interface{ GetOriginalFilename() string }); ok {
+			// Fallback for different metadata structures
+			reqParams.Set("response-content-disposition", fmt.Sprintf("attachment; filename=\"%s\"", meta.GetOriginalFilename()))
+		}
+
+		presignedURL, err = s.objectStore.PresignedGetObject(ctx, s.objectBucket, objectName, ttl, reqParams)
 	case "PUT":
 		presignedURL, err = s.objectStore.PresignedPutObject(ctx, s.objectBucket, objectName, ttl)
 	default:

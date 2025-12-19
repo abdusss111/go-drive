@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   postgres:
@@ -100,6 +99,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./internal/config/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./internal/config/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
       - ./internal/config/api-health.json:/etc/grafana/provisioning/dashboards/api-health.json
       - ./internal/config/storage.json:/etc/grafana/provisioning/dashboards/storage.json
     depends_on:

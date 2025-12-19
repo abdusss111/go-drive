@@ -51,20 +51,20 @@ func Init() (*Logger, error) {
 }
 
 // Helper methods for common logging patterns
-func (l *Logger) Fatal(msg string, err error) {
-	if err != nil {
-		l.Logger.Fatal(msg, zap.Error(err))
-	} else {
-		l.Logger.Fatal(msg)
-	}
+func (l *Logger) Fatal(msg string, fields ...zap.Field) {
+	l.Logger.Fatal(msg, fields...)
 }
 
-func (l *Logger) Error(msg string, err error) {
-	if err != nil {
-		l.Logger.Error(msg, zap.Error(err))
-	} else {
-		l.Logger.Error(msg)
-	}
+func (l *Logger) FatalErr(msg string, err error) {
+	l.Logger.Fatal(msg, zap.Error(err))
+}
+
+func (l *Logger) Error(msg string, fields ...zap.Field) {
+	l.Logger.Error(msg, fields...)
+}
+
+func (l *Logger) ErrorErr(msg string, err error) {
+	l.Logger.Error(msg, zap.Error(err))
 }
 
 func (l *Logger) Info(msg string, fields ...zap.Field) {

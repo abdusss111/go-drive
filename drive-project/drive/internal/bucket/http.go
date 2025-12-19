@@ -26,6 +26,18 @@ type createBucketRequest struct {
 	Description *string `json:"description" binding:"omitempty,max=255"`
 }
 
+// createBucket creates a new bucket.
+// @Summary Create a bucket
+// @Description Create a new storage bucket for the authenticated user.
+// @Tags Buckets
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body createBucketRequest true "Bucket details"
+// @Success 201 {object} Bucket
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 409 {object} map[string]string "bucket already exists"
+// @Router /buckets [post]
 func (h *httpHandler) createBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -53,6 +65,15 @@ func (h *httpHandler) createBucket(c *gin.Context) {
 	c.JSON(http.StatusCreated, bucket)
 }
 
+// listBuckets returns all buckets owned by the user.
+// @Summary List buckets
+// @Description Fetch all storage buckets owned by the authenticated user.
+// @Tags Buckets
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string][]Bucket
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Router /buckets [get]
 func (h *httpHandler) listBuckets(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -69,6 +90,17 @@ func (h *httpHandler) listBuckets(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"buckets": buckets})
 }
 
+// getBucket returns a single bucket by ID.
+// @Summary Get bucket details
+// @Description Fetch metadata and usage for a specific bucket.
+// @Tags Buckets
+// @Produce json
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Success 200 {object} Bucket
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "bucket not found"
+// @Router /buckets/{bucketID} [get]
 func (h *httpHandler) getBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -95,6 +127,16 @@ func (h *httpHandler) getBucket(c *gin.Context) {
 	c.JSON(http.StatusOK, bucket)
 }
 
+// deleteBucket removes a bucket and its contents.
+// @Summary Delete bucket
+// @Description Permanently delete a bucket and all files within it.
+// @Tags Buckets
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Success 204 "no content"
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "bucket not found"
+// @Router /buckets/{bucketID} [delete]
 func (h *httpHandler) deleteBucket(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {

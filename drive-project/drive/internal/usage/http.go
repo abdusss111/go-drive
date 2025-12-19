@@ -30,6 +30,14 @@ type httpHandler struct {
 }
 
 // getUserUsage returns the current user's total usage across all buckets.
+// @Summary Get user usage
+// @Description Fetch total storage usage and file count across all buckets.
+// @Tags Usage
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} UsageResponse
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Router /usage [get]
 func (h *httpHandler) getUserUsage(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -47,6 +55,16 @@ func (h *httpHandler) getUserUsage(c *gin.Context) {
 }
 
 // getBucketUsage returns the usage statistics for a specific bucket.
+// @Summary Get bucket usage
+// @Description Fetch storage usage and file count for a specific bucket.
+// @Tags Usage
+// @Produce json
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Success 200 {object} BucketUsageResponse
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "bucket not found"
+// @Router /buckets/{bucketID}/usage [get]
 func (h *httpHandler) getBucketUsage(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {

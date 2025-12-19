@@ -1,42 +1,108 @@
 {
   "id": null,
-  "title": "Storage & File Activity",
+  "title": "Storage & Activity",
   "timezone": "browser",
   "editable": true,
   "panels": [
     {
       "type": "stat",
-      "title": "Total Upload Requests",
+      "title": "Total Bytes Uploaded",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum(http_requests_total{path=~\".*upload.*\"})"
+          "expr": "sum(file_operation_size_bytes_sum{operation=\"upload\"})",
+          "legendFormat": "Bytes"
         }
       ],
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      }
     },
     {
       "type": "stat",
-      "title": "Total Download Requests",
+      "title": "Total Bytes Downloaded",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "sum(http_requests_total{path=~\".*download.*\"})"
+          "expr": "sum(file_operation_size_bytes_sum{operation=\"download\"})",
+          "legendFormat": "Bytes"
         }
       ],
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes"
+        }
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      }
     },
     {
-      "type": "graph",
-      "title": "File Operation Rate",
+      "type": "stat",
+      "title": "Auth Success Rate",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(http_requests_total{path=~\".*(upload|download).*\"}[2m])",
-          "legendFormat": "{{method}} {{status}}"
+          "expr": "sum(auth_attempts_total{result=~\"login_success|register_success\"}) / sum(auth_attempts_total) * 100",
+          "legendFormat": "%"
         }
       ],
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 8 }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "File Operations Over Time",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(file_operation_size_bytes_count[2m])",
+          "legendFormat": "{{operation}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth Attempts",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(auth_attempts_total[5m]))",
+          "legendFormat": "{{result}}"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 8
+      }
     }
   ],
   "schemaVersion": 30,

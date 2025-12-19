@@ -53,8 +53,16 @@ export default function BucketDetailPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [shareFileId, setShareFileId] = useState<string | null>(null);
     const [shareUrl, setShareUrl] = useState("");
     const [shareTTL, setShareTTL] = useState(3600);
+
+    // Regenerate share link when TTL changes and modal is open
+    useEffect(() => {
+        if (isShareModalOpen && shareFileId) {
+            generateShareLink(shareFileId);
+        }
+    }, [shareTTL]);
 
     useEffect(() => {
         if (!hasHydrated) return;
@@ -118,25 +126,27 @@ export default function BucketDetailPage() {
 
     const handleDownload = async (fileId: string, filename: string) => {
         try {
-            const response = await apiClient.get(
-                `/v1/buckets/${bucketId}/files/${fileId}/download`,
-                { responseType: "blob" }
+            // Get a presigned GET URL for the file
+            const response = await apiClient.post(
+                `/v1/buckets/${bucketId}/files/${fileId}/presigned-url`,
+                {
+                    method: "GET",
+                    ttl: "5m", // Short TTL for immediate download
+                }
             );
 
-            // Preserve the Content-Type from the backend response
-            const contentType = response.headers['content-type'] || 'application/octet-stream';
-            const blob = new Blob([response.data], { type: contentType });
-            const url = window.URL.createObjectURL(blob);
+            const downloadUrl = response.data.url;
 
+            // Trigger download by opening the URL in a hidden iframe or direct link
+            // Using a hidden link is better as it handles filename better with response-content-disposition
             const link = document.createElement("a");
-            link.href = url;
+            link.href = downloadUrl;
             link.setAttribute("download", filename);
             document.body.appendChild(link);
             link.click();
             link.remove();
-            window.URL.revokeObjectURL(url);
 
-            showToast("File downloaded successfully", "success");
+            showToast("Download started", "success");
         } catch (error: any) {
             showToast(error.response?.data?.error || "Failed to download file", "error");
         }
@@ -156,21 +166,26 @@ export default function BucketDetailPage() {
         }
     };
 
-    const handleShare = async (fileId: string) => {
+    const generateShareLink = async (fileId: string) => {
         try {
             const response = await apiClient.post(
                 `/v1/buckets/${bucketId}/files/${fileId}/presigned-url`,
                 {
                     method: "GET",
-                    ttl: `${shareTTL}s`, // Convert seconds to Go duration format
+                    ttl: `${shareTTL}s`,
                 }
             );
 
             setShareUrl(response.data.url);
-            setIsShareModalOpen(true);
         } catch (error: any) {
             showToast(error.response?.data?.error || "Failed to generate share link", "error");
         }
+    };
+
+    const handleShare = (fileId: string) => {
+        setShareFileId(fileId);
+        setIsShareModalOpen(true);
+        generateShareLink(fileId);
     };
 
     const handleCopyShareUrl = () => {
@@ -296,16 +311,32 @@ export default function BucketDetailPage() {
             >
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
+                            Link Expiration
+                        </label>
+                        <select
+                            value={shareTTL}
+                            onChange={(e) => setShareTTL(Number(e.target.value))}
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+                        >
+                            <option value={600}>10 Minutes</option>
+                            <option value={3600}>1 Hour</option>
+                            <option value={86400}>1 Day</option>
+                            <option value={604800}>1 Week</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="mb-1 block text-sm font-medium text-gray-700">
                             Shareable Link
                         </label>
-                        <div className="mt-1 flex gap-2">
+                        <div className="flex gap-2">
                             <Input value={shareUrl} readOnly className="flex-1" />
                             <Button onClick={handleCopyShareUrl}>Copy</Button>
                         </div>
                     </div>
-                    <p className="text-sm text-gray-500">
-                        This link will expire in {shareTTL / 3600} hour(s)
+                    <p className="text-xs text-gray-500">
+                        Anyone with this link can view/download the file until it expires.
                     </p>
                 </div>
             </Modal>

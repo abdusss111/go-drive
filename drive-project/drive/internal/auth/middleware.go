@@ -72,6 +72,18 @@ func RequireUser(c *gin.Context) (uuid.UUID, ContextUser, bool) {
 	return id, user, true
 }
 
+// AdminOnly restricts access to users with administrative privileges.
+func AdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user, ok := CurrentUser(c)
+		if !ok || !user.IsAdmin {
+			c.AbortWithStatusJSON(403, gin.H{"error": "forbidden: administrator access required"})
+			return
+		}
+		c.Next()
+	}
+}
+
 func extractBearerToken(header string) string {
 	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
 		return ""

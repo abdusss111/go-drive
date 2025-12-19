@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/abduss/godrive/internal/config"
+	"github.com/abduss/godrive/internal/metrics"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -92,6 +93,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult
 
 	user, err := s.store.CreateUser(ctx, strings.ToLower(input.Email), hashedPassword, input.DisplayName)
 	if err != nil {
+		metrics.AuthAttemptsTotal.WithLabelValues("register_failure").Inc()
 		if errors.Is(err, ErrEmailAlreadyExists) {
 			return AuthResult{}, ErrEmailAlreadyExists
 		}
@@ -100,9 +102,11 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (AuthResult
 
 	result, err := s.issueTokens(ctx, user)
 	if err != nil {
+		metrics.AuthAttemptsTotal.WithLabelValues("register_failure").Inc()
 		return AuthResult{}, err
 	}
 
+	metrics.AuthAttemptsTotal.WithLabelValues("register_success").Inc()
 	return result, nil
 }
 
@@ -114,6 +118,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 
 	user, err := s.store.FindUserByEmail(ctx, strings.ToLower(input.Email))
 	if err != nil {
+		metrics.AuthAttemptsTotal.WithLabelValues("login_failure").Inc()
 		if errors.Is(err, ErrUserNotFound) {
 			return AuthResult{}, ErrInvalidCredentials
 		}
@@ -121,10 +126,18 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+		metrics.AuthAttemptsTotal.WithLabelValues("login_failure").Inc()
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
-	return s.issueTokens(ctx, user)
+	result, err := s.issueTokens(ctx, user)
+	if err != nil {
+		metrics.AuthAttemptsTotal.WithLabelValues("login_failure").Inc()
+		return AuthResult{}, err
+	}
+
+	metrics.AuthAttemptsTotal.WithLabelValues("login_success").Inc()
+	return result, nil
 }
 
 // ValidateAccessToken verifies the token signature and extracts user claims.

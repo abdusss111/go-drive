@@ -24,6 +24,19 @@ type httpHandler struct {
 }
 
 // generatePresignedURL generates a presigned URL for a file.
+// @Summary Generate presigned URL
+// @Description Create a temporary signed link for direct cloud upload or download.
+// @Tags Files
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Param fileID path string true "File UUID"
+// @Param request body PresignedURLRequest true "URL parameters"
+// @Success 200 {object} PresignedURLResponse
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "file not found"
+// @Router /buckets/{bucketID}/files/{fileID}/presigned-url [post]
 func (h *httpHandler) generatePresignedURL(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {

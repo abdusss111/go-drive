@@ -26,6 +26,19 @@ type httpHandler struct {
 	service *Service
 }
 
+// uploadFile handles file uploads via multipart/form-data.
+// @Summary Upload a file
+// @Description Upload a new file to a specific bucket. Quota check applies.
+// @Tags Files
+// @Accept multipart/form-data
+// @Produce json
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Param file formData file true "File to upload"
+// @Success 201 {object} Metadata
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 413 {object} map[string]string "storage quota exceeded"
+// @Router /buckets/{bucketID}/files [post]
 func (h *httpHandler) uploadFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -78,6 +91,16 @@ func (h *httpHandler) uploadFile(c *gin.Context) {
 	c.JSON(http.StatusCreated, meta)
 }
 
+// listFiles returns all files in a bucket.
+// @Summary List files
+// @Description Fetch metadata for all files in a specific bucket.
+// @Tags Files
+// @Produce json
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Success 200 {object} map[string][]Metadata
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Router /buckets/{bucketID}/files [get]
 func (h *httpHandler) listFiles(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -104,6 +127,18 @@ func (h *httpHandler) listFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"files": list})
 }
 
+// downloadFile streams a file's contents.
+// @Summary Download file
+// @Description Stream a file's contents from the bucket.
+// @Tags Files
+// @Produce octet-stream
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Param fileID path string true "File UUID"
+// @Success 200 {file} binary
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "file not found"
+// @Router /buckets/{bucketID}/files/{fileID}/download [get]
 func (h *httpHandler) downloadFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {
@@ -144,6 +179,17 @@ func (h *httpHandler) downloadFile(c *gin.Context) {
 	}
 }
 
+// deleteFile removes a file from a bucket.
+// @Summary Delete file
+// @Description Permanently delete a file from storage and metadata.
+// @Tags Files
+// @Security Bearer
+// @Param bucketID path string true "Bucket UUID"
+// @Param fileID path string true "File UUID"
+// @Success 204 "no content"
+// @Failure 401 {object} map[string]string "unauthorized"
+// @Failure 404 {object} map[string]string "file/bucket not found"
+// @Router /buckets/{bucketID}/files/{fileID} [delete]
 func (h *httpHandler) deleteFile(c *gin.Context) {
 	userID, _, ok := auth.RequireUser(c)
 	if !ok {

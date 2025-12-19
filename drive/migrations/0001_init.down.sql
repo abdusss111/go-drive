@@ -1,7 +1,0 @@
-DROP TABLE IF EXISTS bucket_usage;
-DROP TABLE IF EXISTS usage_snapshots;
-DROP TABLE IF EXISTS refresh_tokens;
-DROP TABLE IF EXISTS files;
-DROP TABLE IF EXISTS buckets;
-DROP TABLE IF EXISTS users;
-

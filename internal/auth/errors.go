@@ -11,4 +11,6 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 	// ErrUnauthorized represents missing or invalid authentication tokens.
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrInvalidRefreshToken indicates the refresh token is invalid, expired, or revoked.
+	ErrInvalidRefreshToken = errors.New("invalid refresh token")
 )

@@ -27,7 +27,9 @@ const (
 type userStore interface {
 	CreateUser(ctx context.Context, email, passwordHash string, displayName *string) (User, error)
 	FindUserByEmail(ctx context.Context, email string) (User, error)
+	FindUserByID(ctx context.Context, userID uuid.UUID) (User, error)
 	StoreRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error
+	FindRefreshToken(ctx context.Context, tokenHash string) (uuid.UUID, error)
 	RevokeToken(ctx context.Context, userID uuid.UUID, tokenHash string) error
 }
 
@@ -62,6 +64,11 @@ type RegisterInput struct {
 type LoginInput struct {
 	Email    string
 	Password string
+}
+
+// RefreshInput carries refresh token data.
+type RefreshInput struct {
+	RefreshToken string
 }
 
 // AuthResult contains user and token information.
@@ -124,6 +131,36 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
+	return s.issueTokens(ctx, user)
+}
+
+// RefreshTokens validates a refresh token and issues a new token pair.
+func (s *Service) RefreshTokens(ctx context.Context, input RefreshInput) (AuthResult, error) {
+	if strings.TrimSpace(input.RefreshToken) == "" {
+		return AuthResult{}, ErrInvalidRefreshToken
+	}
+
+	refreshHash := hashRefreshToken(input.RefreshToken, s.cfg.RefreshTokenSecret)
+	userID, err := s.store.FindRefreshToken(ctx, refreshHash)
+	if err != nil {
+		return AuthResult{}, ErrInvalidRefreshToken
+	}
+
+	user, err := s.store.FindUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return AuthResult{}, ErrInvalidRefreshToken
+		}
+		return AuthResult{}, fmt.Errorf("find user: %w", err)
+	}
+
+	// Revoke old refresh token
+	if err := s.store.RevokeToken(ctx, userID, refreshHash); err != nil {
+		// Log error but continue - token will be revoked eventually
+		_ = err
+	}
+
+	// Issue new token pair
 	return s.issueTokens(ctx, user)
 }
 

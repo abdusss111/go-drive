@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   api:
-    build: ./drive/cmd/api
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: godrive-api
     ports:
       - "8080:8080"
@@ -49,7 +51,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../../internal/config/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
 
   grafana:
@@ -59,8 +61,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ../../internal/config/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ../../internal/config/dashboards/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ../../internal/config/dashboards:/var/lib/grafana/dashboards
       - grafana-data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=admin

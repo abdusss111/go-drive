@@ -21,9 +21,12 @@ const (
 // Service manages file lifecycle operations.
 type metadataStore interface {
 	Create(ctx context.Context, meta Metadata) (Metadata, error)
-	List(ctx context.Context, ownerID, bucketID uuid.UUID) ([]Metadata, error)
+	List(ctx context.Context, ownerID, bucketID uuid.UUID, opts ListOptions) ([]Metadata, error)
 	Get(ctx context.Context, ownerID, bucketID, fileID uuid.UUID) (Metadata, error)
 	Delete(ctx context.Context, ownerID, bucketID, fileID uuid.UUID) (Metadata, error)
+	FindCurrentVersion(ctx context.Context, ownerID, bucketID uuid.UUID, originalFilename string) (Metadata, error)
+	MarkVersionsAsNotCurrent(ctx context.Context, bucketID uuid.UUID, originalFilename string) error
+	GetVersions(ctx context.Context, ownerID, bucketID uuid.UUID, originalFilename string) ([]Metadata, error)
 }
 
 type Service struct {
@@ -72,6 +75,22 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 		return Metadata{}, ErrFileTooLarge
 	}
 
+	originalFilename := sanitizeFilename(fileHeader.Filename)
+	
+	// Check if file with same name exists
+	existingFile, err := s.repo.FindCurrentVersion(ctx, ownerID, bucketID, originalFilename)
+	version := 1
+	if err == nil {
+		// File exists - create new version
+		version = existingFile.Version + 1
+		// Mark old versions as not current
+		if err := s.repo.MarkVersionsAsNotCurrent(ctx, bucketID, originalFilename); err != nil {
+			return Metadata{}, fmt.Errorf("mark versions as not current: %w", err)
+		}
+	} else if err != ErrFileNotFound {
+		return Metadata{}, fmt.Errorf("check existing file: %w", err)
+	}
+
 	fileID := uuid.New()
 	objectName := fmt.Sprintf("%s/%s", bucketID.String(), fileID.String())
 
@@ -108,10 +127,12 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 		ID:               fileID,
 		BucketID:         bucketID,
 		ObjectName:       objectName,
-		OriginalFilename: sanitizeFilename(fileHeader.Filename),
+		OriginalFilename: originalFilename,
 		SizeBytes:        actualSize,
 		ContentType:      putOpts.ContentType,
 		Checksum:         checksum,
+		Version:          version,
+		IsCurrent:        true,
 	}
 
 	stored, err := s.repo.Create(ctx, meta)
@@ -120,7 +141,18 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 		return Metadata{}, err
 	}
 
-	if err := s.buckets.UpdateUsage(ctx, bucketID, stored.SizeBytes, 1); err != nil {
+	// Update usage: if new version, only update size delta; if new file, increment count
+	deltaFiles := int64(0)
+	deltaBytes := stored.SizeBytes
+	if version > 1 {
+		// New version - subtract old file size, add new size
+		deltaBytes = stored.SizeBytes - existingFile.SizeBytes
+	} else {
+		// New file - increment count
+		deltaFiles = 1
+	}
+	
+	if err := s.buckets.UpdateUsage(ctx, bucketID, deltaBytes, deltaFiles); err != nil {
 		return Metadata{}, err
 	}
 	_ = s.buckets.RecordUsageSnapshot(ctx, ownerID)
@@ -128,12 +160,32 @@ func (s *Service) Upload(ctx context.Context, ownerID, bucketID uuid.UUID, fileH
 	return stored, nil
 }
 
-// List returns file metadata for a user's bucket.
-func (s *Service) List(ctx context.Context, ownerID, bucketID uuid.UUID) ([]Metadata, error) {
+// GetVersions returns all versions of a file.
+func (s *Service) GetVersions(ctx context.Context, ownerID, bucketID uuid.UUID, originalFilename string) ([]Metadata, error) {
 	if _, err := s.buckets.Get(ctx, ownerID, bucketID); err != nil {
 		return nil, translateBucketError(err)
 	}
-	return s.repo.List(ctx, ownerID, bucketID)
+	return s.repo.GetVersions(ctx, ownerID, bucketID, originalFilename)
+}
+
+// ListOptions contains filtering and pagination options for listing files.
+type ListOptions struct {
+	FilenameFilter string // Partial match on original_filename
+	ContentType    string // Exact match on content_type
+	MinSize        *int64 // Minimum file size in bytes
+	MaxSize        *int64 // Maximum file size in bytes
+	SortBy         string // Sort field: "name", "size", "created_at", "updated_at"
+	SortOrder      string // "asc" or "desc"
+	Limit          int    // Maximum number of results
+	Offset         int    // Number of results to skip
+}
+
+// List returns file metadata for a user's bucket with optional filtering.
+func (s *Service) List(ctx context.Context, ownerID, bucketID uuid.UUID, opts ListOptions) ([]Metadata, error) {
+	if _, err := s.buckets.Get(ctx, ownerID, bucketID); err != nil {
+		return nil, translateBucketError(err)
+	}
+	return s.repo.List(ctx, ownerID, bucketID, opts)
 }
 
 // Download retrieves metadata and object reader.

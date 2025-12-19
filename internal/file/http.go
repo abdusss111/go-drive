@@ -15,6 +15,7 @@ func RegisterRoutes(group *gin.RouterGroup, service *Service) {
 	handler := &httpHandler{service: service}
 	group.POST("/buckets/:bucketID/files", handler.uploadFile)
 	group.GET("/buckets/:bucketID/files", handler.listFiles)
+	group.GET("/buckets/:bucketID/files/versions", handler.getVersions)
 	group.GET("/buckets/:bucketID/files/:fileID/download", handler.downloadFile)
 	group.DELETE("/buckets/:bucketID/files/:fileID", handler.deleteFile)
 }
@@ -71,7 +72,43 @@ func (h *httpHandler) listFiles(c *gin.Context) {
 		return
 	}
 
-	list, err := h.service.List(c.Request.Context(), userID, bucketID)
+	// Parse query parameters for filtering
+	opts := ListOptions{
+		FilenameFilter: c.Query("filename"),
+		ContentType:    c.Query("content_type"),
+		SortBy:         c.DefaultQuery("sort_by", "created_at"),
+		SortOrder:      c.DefaultQuery("sort_order", "desc"),
+	}
+
+	// Parse size filters
+	if minSizeStr := c.Query("min_size"); minSizeStr != "" {
+		var minSize int64
+		if _, err := fmt.Sscanf(minSizeStr, "%d", &minSize); err == nil {
+			opts.MinSize = &minSize
+		}
+	}
+
+	if maxSizeStr := c.Query("max_size"); maxSizeStr != "" {
+		var maxSize int64
+		if _, err := fmt.Sscanf(maxSizeStr, "%d", &maxSize); err == nil {
+			opts.MaxSize = &maxSize
+		}
+	}
+
+	// Parse pagination
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if _, err := fmt.Sscanf(limitStr, "%d", &opts.Limit); err != nil {
+			opts.Limit = 0
+		}
+	}
+
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if _, err := fmt.Sscanf(offsetStr, "%d", &opts.Offset); err != nil {
+			opts.Offset = 0
+		}
+	}
+
+	list, err := h.service.List(c.Request.Context(), userID, bucketID, opts)
 	if err != nil {
 		if err == ErrBucketMismatch {
 			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
@@ -82,6 +119,38 @@ func (h *httpHandler) listFiles(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"files": list})
+}
+
+func (h *httpHandler) getVersions(c *gin.Context) {
+	userID, _, ok := auth.RequireUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	bucketID, err := uuid.Parse(c.Param("bucketID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid bucket id"})
+		return
+	}
+
+	filename := c.Query("filename")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "filename query parameter is required"})
+		return
+	}
+
+	versions, err := h.service.GetVersions(c.Request.Context(), userID, bucketID, filename)
+	if err != nil {
+		if err == ErrBucketMismatch {
+			c.JSON(http.StatusNotFound, gin.H{"error": "bucket not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get versions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"versions": versions})
 }
 
 func (h *httpHandler) downloadFile(c *gin.Context) {

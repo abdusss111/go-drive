@@ -14,6 +14,7 @@ func RegisterRoutes(router *gin.RouterGroup, service *Service) {
 	{
 		authGroup.POST("/register", handler.register)
 		authGroup.POST("/login", handler.login)
+		authGroup.POST("/refresh", handler.refresh)
 	}
 }
 
@@ -30,6 +31,10 @@ type registerRequest struct {
 type loginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8,max=72"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 type authResponse struct {
@@ -98,6 +103,32 @@ func (h *httpHandler) login(c *gin.Context) {
 			// Include error message for debugging
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":  "failed to authenticate",
+				"detail": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, marshalAuthResponse(result))
+}
+
+func (h *httpHandler) refresh(c *gin.Context) {
+	var req refreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.service.RefreshTokens(c.Request.Context(), RefreshInput{
+		RefreshToken: req.RefreshToken,
+	})
+	if err != nil {
+		switch err {
+		case ErrInvalidRefreshToken:
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":  "failed to refresh tokens",
 				"detail": err.Error(),
 			})
 		}

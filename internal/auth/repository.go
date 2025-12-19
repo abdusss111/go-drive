@@ -77,6 +77,36 @@ WHERE email = $1;`
 	return user, nil
 }
 
+// FindUserByID fetches a user by ID.
+func (r *Repository) FindUserByID(ctx context.Context, userID uuid.UUID) (User, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	query := `
+SELECT id, email, password_hash, display_name, is_admin, created_at, updated_at
+FROM users
+WHERE id = $1;`
+
+	var user User
+	err := r.pool.QueryRow(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.PasswordHash,
+		&user.DisplayName,
+		&user.IsAdmin,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return User{}, ErrUserNotFound
+		}
+		return User{}, fmt.Errorf("find user by id: %w", err)
+	}
+
+	return user, nil
+}
+
 // StoreRefreshToken saves or updates a refresh token hash for the user.
 func (r *Repository) StoreRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
@@ -101,6 +131,29 @@ func isUniqueViolation(err error) bool {
 		return pgErr.Code == "23505"
 	}
 	return false
+}
+
+// FindRefreshToken finds a refresh token by hash and validates it's not revoked and not expired.
+func (r *Repository) FindRefreshToken(ctx context.Context, tokenHash string) (uuid.UUID, error) {
+	ctx, cancel := context.WithTimeout(ctx, defaultQueryTimeout)
+	defer cancel()
+
+	query := `
+SELECT user_id, expires_at
+FROM refresh_tokens
+WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > NOW();`
+
+	var userID uuid.UUID
+	var expiresAt time.Time
+	err := r.pool.QueryRow(ctx, query, tokenHash).Scan(&userID, &expiresAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrInvalidRefreshToken
+		}
+		return uuid.Nil, fmt.Errorf("find refresh token: %w", err)
+	}
+
+	return userID, nil
 }
 
 // RevokeToken marks a refresh token as revoked.

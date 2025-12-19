@@ -27,3 +27,8 @@
 - Used by go 1.22
 - For local development, MinIO and PostgreSQL run in containers
 - To run locally without Docker, make sure that PostgreSQL and MinIO are running locally
+
+To run the project:
+ ```
+ docker-compose up --build
+ ```

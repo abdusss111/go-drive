@@ -29,6 +29,10 @@
 - To run locally without Docker, make sure that PostgreSQL and MinIO are running locally
 
 To run the project:
+cd drive-project/drive
+
+create an .env by .env.example.backend
+then run
  ```
  docker-compose up --build
  ```

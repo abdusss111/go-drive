@@ -31,7 +31,7 @@
 To run the project:
 cd drive-project/drive
 
-create an .env by .env.example.backend
+create an .env by env.example.backend
 then run
  ```
  docker-compose up --build
